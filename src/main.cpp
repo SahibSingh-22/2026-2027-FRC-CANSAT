@@ -4,9 +4,10 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP085.h>
 #include <Adafruit_MPU6050.h>
+#include "camera.h"
 
-#define I2C_SDA 13     // I2C data
-#define I2C_SCL 15     // I2C clock
+#define I2C_SDA 41     // I2C data
+#define I2C_SCL 42     // I2C clock
 #define LED_ONBOARD 33 // LED active LOW
 
 // Flight states
@@ -82,6 +83,7 @@ void checkLanding();
 void ledBlink(int times, int onMs, int offMs);
 void errorSignal(const char *message);
 
+
 // Setup
 void setup()
 {
@@ -103,11 +105,22 @@ void setup()
   calibrateGroundAltitude();
 
   ledBlink(3, 150, 150);
+
+  initCamera();
+  initSD();
 }
 
 // Loop
-void loop()
-{
+void loop(){
+
+  if (recording) {
+    captureFrame();
+
+    // Stop after 10 seconds
+    if (millis() > 10000) {
+        stopRecording();
+    }
+  }
   now = millis();
 
   if (now - lastSampleTime >= SAMPLE_INTERVAL_MS)
