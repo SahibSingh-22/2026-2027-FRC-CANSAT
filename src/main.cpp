@@ -2,7 +2,7 @@
 
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
-#include <Adafruit_BMP085.h>
+#include <Adafruit_BMP280.h>
 #include <Adafruit_MPU6050.h>
 #include "camera.h"
 
@@ -40,7 +40,7 @@ const char *stateToString(FlightState s)
 }
 
 // Sensors
-Adafruit_BMP085 bmp;
+Adafruit_BMP280 bmp;
 Adafruit_MPU6050 mpu;
 
 // State variables
@@ -158,9 +158,9 @@ void loop(){
 // Sensor init
 bool initSensors()
 {
-  if (!bmp.begin())
+  if (!bmp.begin(0x77))
   {
-    Serial.println("BMP180 fail");
+    Serial.println("BMP280 fail");
     return false;
   }
 
