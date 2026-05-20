@@ -5,7 +5,7 @@
 #include <Adafruit_BMP280.h>
 #include <Adafruit_MPU6050.h>
 #include "camera.h"
-#include "sd_logger.cpp"
+#include "sd_logger.h"
 
 #define I2C_SDA 41     // I2C data
 #define I2C_SCL 42     // I2C clock
