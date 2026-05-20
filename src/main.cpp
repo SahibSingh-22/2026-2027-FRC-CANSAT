@@ -5,6 +5,7 @@
 #include <Adafruit_BMP280.h>
 #include <Adafruit_MPU6050.h>
 #include "camera.h"
+#include "sd_logger.cpp"
 
 #define I2C_SDA 41     // I2C data
 #define I2C_SCL 42     // I2C clock
@@ -13,9 +14,8 @@
 // Flight states
 enum FlightState
 {
-  PRELAUNCH,
-  ASCENT,
-  APOGEE,
+  PREDROP,
+  RELEASED,
   DESCENT,
   LANDED
 };
@@ -24,12 +24,10 @@ const char *stateToString(FlightState s)
 {
   switch (s)
   {
-  case PRELAUNCH:
-    return "PRELAUNCH";
-  case ASCENT:
-    return "ASCENT";
-  case APOGEE:
-    return "APOGEE";
+  case PREDROP:
+    return "PREDROP";
+  case RELEASED:
+    return "RELEASED";
   case DESCENT:
     return "DESCENT";
   case LANDED:
@@ -44,45 +42,43 @@ Adafruit_BMP280 bmp;
 Adafruit_MPU6050 mpu;
 
 // State variables
-FlightState state = PRELAUNCH;
+FlightState state = PREDROP;
 
 float altitude = 0.0f;
-float maxAltitude = 0.0f;
+float previousAltitude = 0.0f;
 float groundAltitude = 0.0f;
 float temp = 0.0f;
 float accelX, accelY, accelZ;
 float gyroX, gyroY, gyroZ;
 
 unsigned long now = 0;
+unsigned long recordingStart = 0;
+unsigned long recordingStop = 0;
 unsigned long lastSampleTime = 0;
 
 // Timing
 const unsigned long SAMPLE_INTERVAL_MS = 100; // 10 Hz
 
 // EMA filter
-const float EMA_ALPHA = 0.9f;
+const float EMA_ALPHA = 0.7f;
 bool emaReady = false;
 
 // Thresholds
-const float LAUNCH_ACCEL_THRESHOLD = 15.0f;
-const float LAUNCH_ALT_THRESHOLD = 2.0f;
-const float APOGEE_DROP_THRESHOLD = 5.0f;
 const float LANDING_ALT_THRESHOLD = 2.0f;
 const float LANDING_ACCEL_MAX = 11.0f;
 
-// Launch detection counter
-int accelCount = 0; // counts consecutive accel spikes
+// counters
+int dropCounter = 0;
+int landedCounter = 0;
 
 // Function declarations
 bool initSensors();
 void calibrateGroundAltitude();
 void readSensors();
-void checkLaunch();
-void checkApogee();
+void checkRelease();
 void checkLanding();
 void ledBlink(int times, int onMs, int offMs);
 void errorSignal(const char *message);
-
 
 // Setup
 void setup()
@@ -111,17 +107,27 @@ void setup()
 }
 
 // Loop
-void loop(){
+void loop()
+{
+  now = millis();
+  if (!recording && now - recordingStop >= 10000)
+  {
+    recording = true;
+    recordingStart = now;
+  }
 
-  if (recording) {
+  if (recording)
+  {
     captureFrame();
 
     // Stop after 10 seconds
-    if (millis() > 10000) {
-        stopRecording();
+    if (now - recordingStart >= 10000)
+    {
+      stopRecording();
+      recordingStop = now;
+      recording = false;
     }
   }
-  now = millis();
 
   if (now - lastSampleTime >= SAMPLE_INTERVAL_MS)
   {
@@ -132,15 +138,16 @@ void loop(){
     switch (state)
     {
 
-    case PRELAUNCH:
-      checkLaunch();
+    case PREDROP:
+      checkRelease();
       break;
 
-    case ASCENT:
-      checkApogee();
-      break;
-
-    case APOGEE:
+    case RELEASED:
+      if (!recording)
+      {
+        recording = true;
+        recordingStart = now;
+      }
       state = DESCENT;
       break;
 
@@ -177,26 +184,10 @@ bool initSensors()
   return true;
 }
 
-// Calibrate ground altitude
-void calibrateGroundAltitude()
-{
-  float sum = 0.0f;
-
-  for (int i = 0; i < 20; i++)
-  {
-    float pressure = bmp.readPressure();
-    sum += 44330.0f * (1.0f - pow(pressure / 101325.0f, 0.1903f));
-    delay(50);
-  }
-
-  groundAltitude = sum / 20;
-  altitude = 0.0f;
-  emaReady = true;
-}
-
 // Read sensors
 void readSensors()
 {
+  previousAltitude = altitude;
   float pressure = bmp.readPressure();
   temp = bmp.readTemperature();
 
@@ -222,55 +213,63 @@ void readSensors()
   gyroX = g.gyro.x;
   gyroY = g.gyro.y;
   gyroZ = g.gyro.z;
+  sd_log(temp, pressure, altitude);
 }
 
-// Detect launch (tuned)
-void checkLaunch()
+void checkRelease()
 {
   float totalAccel = sqrt(accelX * accelX + accelY * accelY + accelZ * accelZ);
+  float altitudeDrop = previousAltitude - altitude;
 
-  if (totalAccel > LAUNCH_ACCEL_THRESHOLD)
+  if (totalAccel < 3.0 && altitudeDrop > 0.5)
   {
-    accelCount++; // count sustained accel
+    dropCounter += 1;
   }
   else
   {
-    accelCount = 0; // reset
+    dropCounter = 0;
   }
 
-  if (accelCount > 5 && altitude > LAUNCH_ALT_THRESHOLD)
-  { // sustained accel + altitude
-    state = ASCENT;
-    maxAltitude = altitude;
-    digitalWrite(LED_ONBOARD, LOW); // LED on
-    Serial.println("LAUNCH DETECTED");
+  if (dropCounter >= 3)
+  {
+    state = RELEASED;
+    Serial.println("Release detected");
   }
 }
 
-// Detect apogee
-void checkApogee()
+void calibrateGroundAltitude()
 {
-  if (altitude > maxAltitude)
+  float sum = 0;
+
+  for (int i = 0; i < 20; i++)
   {
-    maxAltitude = altitude;
+    float pressure = bmp.readPressure();
+
+    sum += 44330.0f *
+           (1.0f - pow(pressure / 101325.0f, 0.1903f));
+
+    delay(50);
   }
 
-  if (altitude < (maxAltitude - APOGEE_DROP_THRESHOLD))
-  {
-    state = APOGEE;
-    Serial.println("APOGEE");
-  }
+  groundAltitude = sum / 20;
 }
 
 // Detect landing
 void checkLanding()
 {
   float totalAccel = sqrt(accelX * accelX + accelY * accelY + accelZ * accelZ);
-
-  if (altitude < LANDING_ALT_THRESHOLD && totalAccel < LANDING_ACCEL_MAX)
+  float altitudeChange = abs(previousAltitude - altitude);
+  if (totalAccel > 7.0 && altitude < LANDING_ALT_THRESHOLD && totalAccel < 11.5 && altitudeChange < 0.5)
+  {
+    landedCounter += 1;
+  }
+  else
+  {
+    landedCounter = 0;
+  }
+  if (landedCounter >= 20)
   {
     state = LANDED;
-    Serial.println("LANDED");
   }
 }
 
