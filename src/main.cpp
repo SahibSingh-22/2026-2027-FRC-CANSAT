@@ -99,6 +99,8 @@ void setup()
 
   initCamera();
   initSD();
+
+  startRecording();
 }
 
 // Loop
