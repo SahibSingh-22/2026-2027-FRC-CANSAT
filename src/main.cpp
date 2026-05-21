@@ -108,11 +108,13 @@ void setup()
 
   initCamera();
   initSD();
+
+  startRecording();
 }
 
 // Loop
 void loop(){
-
+  
   if (recording) {
     captureFrame();
 
