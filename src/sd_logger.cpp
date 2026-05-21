@@ -1,10 +1,14 @@
 #include "sd_logger.h"
 #include <SD.h>
 #include <SPI.h>
+#include "mpu6050.h"
+#include <Arduino.h>
 
 static uint32_t rowCount = 0;
-bool sd_init() {
-    if (!SD.begin(SD_CS_PIN)) {
+bool sd_init()
+{
+    if (!SD.begin(SD_CS_PIN))
+    {
         Serial.println("[SD] ERROR: Card not found or failed to mount.");
         Serial.println("[SD] Check wiring and that CS pin matches SD_CS_PIN.");
         return false;
@@ -12,23 +16,26 @@ bool sd_init() {
 
     File logFile = SD.open(LOG_FILENAME, FILE_WRITE);
 
-    if (!logFile) {
+    if (!logFile)
+    {
         Serial.println("[SD] ERROR: Could not open log file for writing.");
         return false;
     }
 
-    logFile.println("row,temperature_c,pressure_pa,altitude_m");
+    logFile.println("row, time_ms, temperature_c,pressure_pa,altitude_m, accelX, accelY, accelZ, gyroX, gyroY, gyroZ");
     logFile.close();
 
     Serial.println("[SD] Initialised. Logging to: " LOG_FILENAME);
     return true;
 }
 
-void sd_log(float temperature, float pressure, float altitude) {
-    //idk the what exactly we are measuring so i put random ones down feel free to change them
+void sd_log(float temperature, float pressure, float altitude, sensorAccel accelData, sensorGyro gyroData)
+{
+    // idk the what exactly we are measuring so i put random ones down feel free to change them
     File logFile = SD.open(LOG_FILENAME, FILE_WRITE);
 
-    if (!logFile) {
+    if (!logFile)
+    {
         Serial.println("[SD] WARNING: Could not open file to write row.");
         return;
     }
@@ -36,18 +43,33 @@ void sd_log(float temperature, float pressure, float altitude) {
     rowCount++;
     logFile.print(rowCount);
     logFile.print(",");
-    logFile.print(temperature, 2);
+    logFile.print(millis(), 2);
     logFile.print(",");
-    logFile.print(pressure, 2);
+    logFile.print(temperature, 3);
     logFile.print(",");
-    logFile.println(altitude, 2);
+    logFile.print(pressure, 3);
+    logFile.print(",");
+    logFile.print(altitude, 3);
+    logFile.print(accelData.accelX, 3);
+    logFile.print(",");
+    logFile.print(accelData.accelY, 3);
+    logFile.print(",");
+    logFile.print(accelData.accelZ, 3);
+    logFile.print(",");
+    logFile.print(gyroData.gyroX, 3);
+    logFile.print(",");
+    logFile.print(gyroData.gyroY, 3);
+    logFile.print(",");
+    logFile.println(gyroData.gyroZ);
 
     logFile.close();
 
     Serial.print("[SD] Row written: ");
     Serial.println(rowCount);
 }
-void sd_flush() {
+void sd_flush()
+{
     File logFile = SD.open(LOG_FILENAME, FILE_WRITE);
-    if (logFile) logFile.close();
+    if (logFile)
+        logFile.close();
 }

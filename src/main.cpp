@@ -1,9 +1,8 @@
 #include <Arduino.h>
 
 #include <Wire.h>
-#include <Adafruit_Sensor.h>
-#include <Adafruit_BMP280.h>
-#include <Adafruit_MPU6050.h>
+#include "bmp280.h"
+#include "mpu6050.h"
 #include "camera.h"
 #include "sd_logger.h"
 
@@ -37,10 +36,6 @@ const char *stateToString(FlightState s)
   }
 }
 
-// Sensors
-Adafruit_BMP280 bmp;
-Adafruit_MPU6050 mpu;
-
 // State variables
 FlightState state = PREDROP;
 
@@ -48,8 +43,9 @@ float altitude = 0.0f;
 float previousAltitude = 0.0f;
 float groundAltitude = 0.0f;
 float temp = 0.0f;
-float accelX, accelY, accelZ;
-float gyroX, gyroY, gyroZ;
+float pressure = 0.0f;
+sensorAccel accelData;
+sensorGyro gyroData;
 
 unsigned long now = 0;
 unsigned long recordingStart = 0;
@@ -73,7 +69,6 @@ int landedCounter = 0;
 
 // Function declarations
 bool initSensors();
-void calibrateGroundAltitude();
 void readSensors();
 void checkRelease();
 void checkLanding();
@@ -98,7 +93,7 @@ void setup()
     errorSignal("Sensor init failed!");
   }
 
-  calibrateGroundAltitude();
+  groundAltitude = calibrateGroundAltitude();
 
   ledBlink(3, 150, 150);
 
@@ -165,22 +160,14 @@ void loop()
 // Sensor init
 bool initSensors()
 {
-  if (!bmp.begin(0x77))
+  if (!initMPU())
   {
-    Serial.println("BMP280 fail");
     return false;
   }
-
-  if (!mpu.begin())
+  if (!initBMP())
   {
-    Serial.println("MPU6050 fail");
     return false;
   }
-
-  mpu.setAccelerometerRange(MPU6050_RANGE_16_G);
-  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
-  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
-
   return true;
 }
 
@@ -188,37 +175,20 @@ bool initSensors()
 void readSensors()
 {
   previousAltitude = altitude;
-  float pressure = bmp.readPressure();
-  temp = bmp.readTemperature();
 
-  float rawAltitude = 44330.0f * (1.0f - pow(pressure / 101325.0f, 0.1903f)) - groundAltitude;
+  accelData = getAccel();
+  gyroData = getGyro();
 
-  if (!emaReady)
-  {
-    altitude = rawAltitude;
-    emaReady = true;
-  }
-  else
-  {
-    altitude = EMA_ALPHA * altitude + (1.0f - EMA_ALPHA) * rawAltitude;
-  }
+  pressure = getPressure();
+  altitude = getAltitude(previousAltitude, groundAltitude, emaReady);
+  temp = getTemp();
 
-  sensors_event_t a, g, t;
-  mpu.getEvent(&a, &g, &t);
-
-  accelX = a.acceleration.x;
-  accelY = a.acceleration.y;
-  accelZ = a.acceleration.z;
-
-  gyroX = g.gyro.x;
-  gyroY = g.gyro.y;
-  gyroZ = g.gyro.z;
-  sd_log(temp, pressure, altitude);
+  sd_log(temp, pressure, altitude, accelData, gyroData);
 }
 
 void checkRelease()
 {
-  float totalAccel = sqrt(accelX * accelX + accelY * accelY + accelZ * accelZ);
+  float totalAccel = sqrt(accelData.accelX * accelData.accelX + accelData.accelY * accelData.accelY + accelData.accelZ * accelData.accelZ);
   float altitudeDrop = previousAltitude - altitude;
 
   if (totalAccel < 3.0 && altitudeDrop > 0.5)
@@ -237,27 +207,10 @@ void checkRelease()
   }
 }
 
-void calibrateGroundAltitude()
-{
-  float sum = 0;
-
-  for (int i = 0; i < 20; i++)
-  {
-    float pressure = bmp.readPressure();
-
-    sum += 44330.0f *
-           (1.0f - pow(pressure / 101325.0f, 0.1903f));
-
-    delay(50);
-  }
-
-  groundAltitude = sum / 20;
-}
-
 // Detect landing
 void checkLanding()
 {
-  float totalAccel = sqrt(accelX * accelX + accelY * accelY + accelZ * accelZ);
+  float totalAccel = sqrt(accelData.accelX * accelData.accelX + accelData.accelY * accelData.accelY + accelData.accelZ * accelData.accelZ);
   float altitudeChange = abs(previousAltitude - altitude);
   if (totalAccel > 7.0 && altitude < LANDING_ALT_THRESHOLD && totalAccel < 11.5 && altitudeChange < 0.5)
   {
