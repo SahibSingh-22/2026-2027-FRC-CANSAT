@@ -41,26 +41,7 @@ bool initBMP()
 {
     if (!bmp.begin(0x77))
     {
-        Serial.println("BMP init fail!");
         return false;
     }
-    Serial.println("BMP init success");
     return true;
-}
-
-float calibrateGroundAltitude()
-{
-    float sum = 0;
-
-    for (int i = 0; i < 20; i++)
-    {
-        float pressure = bmp.readPressure();
-
-        sum += 44330.0f *
-               (1.0f - pow(pressure / 101325.0f, 0.1903f));
-
-        delay(50);
-    }
-
-    return sum / 20;
 }

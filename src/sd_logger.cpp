@@ -29,7 +29,7 @@ bool sd_init()
     return true;
 }
 
-void sd_log(float temperature, float pressure, float altitude, sensorAccel accelData, sensorGyro gyroData)
+void sd_log(telemetryData sensorData)
 {
     // idk the what exactly we are measuring so i put random ones down feel free to change them
     File logFile = SD.open(LOG_FILENAME, FILE_WRITE);
@@ -45,22 +45,23 @@ void sd_log(float temperature, float pressure, float altitude, sensorAccel accel
     logFile.print(",");
     logFile.print(millis(), 2);
     logFile.print(",");
-    logFile.print(temperature, 3);
+    logFile.print(sensorData.temp, 3);
     logFile.print(",");
-    logFile.print(pressure, 3);
+    logFile.print(sensorData.pressure, 3);
     logFile.print(",");
-    logFile.print(altitude, 3);
-    logFile.print(accelData.accelX, 3);
+    logFile.print(sensorData.altitude, 3);
     logFile.print(",");
-    logFile.print(accelData.accelY, 3);
+    logFile.print(sensorData.accelData.accelX, 3);
     logFile.print(",");
-    logFile.print(accelData.accelZ, 3);
+    logFile.print(sensorData.accelData.accelY, 3);
     logFile.print(",");
-    logFile.print(gyroData.gyroX, 3);
+    logFile.print(sensorData.accelData.accelZ, 3);
     logFile.print(",");
-    logFile.print(gyroData.gyroY, 3);
+    logFile.print(sensorData.gyroData.gyroX, 3);
     logFile.print(",");
-    logFile.println(gyroData.gyroZ);
+    logFile.print(sensorData.gyroData.gyroY, 3);
+    logFile.print(",");
+    logFile.println(sensorData.gyroData.gyroZ);
 
     logFile.close();
 

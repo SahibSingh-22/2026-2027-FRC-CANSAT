@@ -1,14 +1,9 @@
 #include <Arduino.h>
-
+#include "sensors.h"
 #include <Wire.h>
-#include "bmp280.h"
-#include "mpu6050.h"
 #include "camera.h"
 #include "sd_logger.h"
-
-#define I2C_SDA 47     // I2C data
-#define I2C_SCL 21     // I2C clock
-#define LED_ONBOARD 33 // LED active LOW
+#include "constants.h"
 
 // Flight states
 enum FlightState
@@ -39,37 +34,22 @@ const char *stateToString(FlightState s)
 // State variables
 FlightState state = PREDROP;
 
-float altitude = 0.0f;
 float previousAltitude = 0.0f;
 float groundAltitude = 0.0f;
-float temp = 0.0f;
-float pressure = 0.0f;
-sensorAccel accelData;
-sensorGyro gyroData;
+telemetryData sensorData;
+
+int landedCounter = 0;
+int dropCounter = 0;
 
 unsigned long now = 0;
 unsigned long recordingStart = 0;
 unsigned long recordingStop = 0;
 unsigned long lastSampleTime = 0;
 
-// Timing
-const unsigned long SAMPLE_INTERVAL_MS = 100; // 10 Hz
-
 // EMA filter
-const float EMA_ALPHA = 0.7f;
 bool emaReady = false;
 
-// Thresholds
-const float LANDING_ALT_THRESHOLD = 2.0f;
-const float LANDING_ACCEL_MAX = 11.0f;
-
-// counters
-int dropCounter = 0;
-int landedCounter = 0;
-
 // Function declarations
-bool initSensors();
-void readSensors();
 void checkRelease();
 void checkLanding();
 void ledBlink(int times, int onMs, int offMs);
@@ -93,7 +73,7 @@ void setup()
     errorSignal("Sensor init failed!");
   }
 
-  groundAltitude = calibrateGroundAltitude();
+  calibrateGroundAltitude();
 
   ledBlink(3, 150, 150);
 
@@ -130,7 +110,9 @@ void loop()
   {
     lastSampleTime = now;
 
-    readSensors();
+    previousAltitude = sensorData.altitude;
+    sensorData = getSensorData();
+    sd_log(sensorData);
 
     switch (state)
     {
@@ -158,40 +140,10 @@ void loop()
     }
   }
 }
-
-// Sensor init
-bool initSensors()
-{
-  if (!initMPU())
-  {
-    return false;
-  }
-  if (!initBMP())
-  {
-    return false;
-  }
-  return true;
-}
-
-// Read sensors
-void readSensors()
-{
-  previousAltitude = altitude;
-
-  accelData = getAccel();
-  gyroData = getGyro();
-
-  pressure = getPressure();
-  altitude = getAltitude(previousAltitude, groundAltitude, emaReady);
-  temp = getTemp();
-
-  sd_log(temp, pressure, altitude, accelData, gyroData);
-}
-
 void checkRelease()
 {
-  float totalAccel = sqrt(accelData.accelX * accelData.accelX + accelData.accelY * accelData.accelY + accelData.accelZ * accelData.accelZ);
-  float altitudeDrop = previousAltitude - altitude;
+  float totalAccel = sqrt(sensorData.accelData.accelX * sensorData.accelData.accelX + sensorData.accelData.accelY * sensorData.accelData.accelY + sensorData.accelData.accelZ * sensorData.accelData.accelZ);
+  float altitudeDrop = previousAltitude - sensorData.altitude;
 
   if (totalAccel < 3.0 && altitudeDrop > 0.5)
   {
@@ -212,9 +164,9 @@ void checkRelease()
 // Detect landing
 void checkLanding()
 {
-  float totalAccel = sqrt(accelData.accelX * accelData.accelX + accelData.accelY * accelData.accelY + accelData.accelZ * accelData.accelZ);
-  float altitudeChange = abs(previousAltitude - altitude);
-  if (totalAccel > 7.0 && altitude < LANDING_ALT_THRESHOLD && totalAccel < 11.5 && altitudeChange < 0.5)
+  float totalAccel = sqrt(sensorData.accelData.accelX * sensorData.accelData.accelX + sensorData.accelData.accelY * sensorData.accelData.accelY + sensorData.accelData.accelZ * sensorData.accelData.accelZ);
+  float altitudeChange = abs(previousAltitude - sensorData.altitude);
+  if (totalAccel > LANDING_ACCEL_THRESHOLD && sensorData.altitude < LANDING_ALT_THRESHOLD && altitudeChange < LANDING_ALTCHANGE_THRESHOLD)
   {
     landedCounter += 1;
   }
