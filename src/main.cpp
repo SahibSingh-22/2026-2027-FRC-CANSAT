@@ -6,8 +6,8 @@
 #include "camera.h"
 #include "sd_logger.h"
 
-#define I2C_SDA 41     // I2C data
-#define I2C_SCL 42     // I2C clock
+#define I2C_SDA 47     // I2C data
+#define I2C_SCL 21     // I2C clock
 #define LED_ONBOARD 33 // LED active LOW
 
 // Flight states
