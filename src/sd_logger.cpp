@@ -1,35 +1,25 @@
 #include "sd_logger.h"
-#include <SD.h>
-#include <SPI.h>
+#include <FS.h>
+#include <SD_MMC.h>
 
 static uint32_t rowCount = 0;
 bool sd_init() {
-    if (!SD.begin(SD_CS_PIN)) {
-        Serial.println("[SD] ERROR: Card not found or failed to mount.");
-        Serial.println("[SD] Check wiring and that CS pin matches SD_CS_PIN.");
+    SD_MMC.setPins(SD_MMC_CLK, SD_MMC_CMD, SD_MMC_D0, SD_MMC_D1, SD_MMC_D2, SD_MMC_D3);
+    if (!SD_MMC.begin("/sdcard",false)){
+        Serial.println("SD Card Mount Failed");
         return false;
     }
-
-    File logFile = SD.open(LOG_FILENAME, FILE_WRITE);
-
-    if (!logFile) {
-        Serial.println("[SD] ERROR: Could not open log file for writing.");
-        return false;
+    else{
+        return true;
     }
-
-    logFile.println("row,temperature_c,pressure_pa,altitude_m");
-    logFile.close();
-
-    Serial.println("[SD] Initialised. Logging to: " LOG_FILENAME);
-    return true;
 }
 
 void sd_log(float temperature, float pressure, float altitude) {
     //idk the what exactly we are measuring so i put random ones down feel free to change them
-    File logFile = SD.open(LOG_FILENAME, FILE_WRITE);
+    File logFile = SD_MMC.open(LOG_FILENAME, FILE_APPEND);
 
     if (!logFile) {
-        Serial.println("[SD] WARNING: Could not open file to write row.");
+        Serial.println("Could not open file to write row.");
         return;
     }
 
@@ -46,8 +36,4 @@ void sd_log(float temperature, float pressure, float altitude) {
 
     Serial.print("[SD] Row written: ");
     Serial.println(rowCount);
-}
-void sd_flush() {
-    File logFile = SD.open(LOG_FILENAME, FILE_WRITE);
-    if (logFile) logFile.close();
 }

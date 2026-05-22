@@ -5,9 +5,10 @@
 #include <Adafruit_BMP280.h>
 #include <Adafruit_MPU6050.h>
 #include "camera.h"
+#include "sd_logger.h"
 
-#define I2C_SDA 41     // I2C data
-#define I2C_SCL 42     // I2C clock
+#define I2C_SDA 1    // I2C data
+#define I2C_SCL 2     // I2C clock
 #define LED_ONBOARD 33 // LED active LOW
 
 // Flight states
@@ -105,9 +106,10 @@ void setup()
   calibrateGroundAltitude();
 
   ledBlink(3, 150, 150);
-
+  
+  sd_init();
   initCamera();
-  initSD();
+  
 
   startRecording();
 }
@@ -224,6 +226,14 @@ void readSensors()
   gyroX = g.gyro.x;
   gyroY = g.gyro.y;
   gyroZ = g.gyro.z;
+
+  Serial.println("Temperature: ");
+  Serial.println(temp);
+  Serial.println("Pressure: ");
+  Serial.println(pressure);
+  Serial.println("Altitude: ");
+  Serial.println(altitude);
+
 }
 
 // Detect launch (tuned)
