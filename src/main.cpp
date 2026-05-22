@@ -1,9 +1,6 @@
 #include <Arduino.h>
-
+#include "sensors.h"
 #include <Wire.h>
-#include <Adafruit_Sensor.h>
-#include <Adafruit_BMP280.h>
-#include <Adafruit_MPU6050.h>
 #include "camera.h"
 #include "sd_logger.h"
 
@@ -14,9 +11,8 @@
 // Flight states
 enum FlightState
 {
-  PRELAUNCH,
-  ASCENT,
-  APOGEE,
+  PREDROP,
+  RELEASED,
   DESCENT,
   LANDED
 };
@@ -25,12 +21,10 @@ const char *stateToString(FlightState s)
 {
   switch (s)
   {
-  case PRELAUNCH:
-    return "PRELAUNCH";
-  case ASCENT:
-    return "ASCENT";
-  case APOGEE:
-    return "APOGEE";
+  case PREDROP:
+    return "PREDROP";
+  case RELEASED:
+    return "RELEASED";
   case DESCENT:
     return "DESCENT";
   case LANDED:
@@ -40,50 +34,29 @@ const char *stateToString(FlightState s)
   }
 }
 
-// Sensors
-Adafruit_BMP280 bmp;
-Adafruit_MPU6050 mpu;
-
 // State variables
-FlightState state = PRELAUNCH;
+FlightState state = PREDROP;
 
-float altitude = 0.0f;
-float maxAltitude = 0.0f;
+float previousAltitude = 0.0f;
 float groundAltitude = 0.0f;
-float temp = 0.0f;
-float accelX, accelY, accelZ;
-float gyroX, gyroY, gyroZ;
+telemetryData sensorData;
+
+int landedCounter = 0;
+int dropCounter = 0;
 
 unsigned long now = 0;
+unsigned long recordingStart = 0;
+unsigned long recordingStop = 0;
 unsigned long lastSampleTime = 0;
 
-// Timing
-const unsigned long SAMPLE_INTERVAL_MS = 100; // 10 Hz
-
 // EMA filter
-const float EMA_ALPHA = 0.9f;
 bool emaReady = false;
 
-// Thresholds
-const float LAUNCH_ACCEL_THRESHOLD = 15.0f;
-const float LAUNCH_ALT_THRESHOLD = 2.0f;
-const float APOGEE_DROP_THRESHOLD = 5.0f;
-const float LANDING_ALT_THRESHOLD = 2.0f;
-const float LANDING_ACCEL_MAX = 11.0f;
-
-// Launch detection counter
-int accelCount = 0; // counts consecutive accel spikes
-
 // Function declarations
-bool initSensors();
-void calibrateGroundAltitude();
-void readSensors();
-void checkLaunch();
-void checkApogee();
+void checkRelease();
 void checkLanding();
 void ledBlink(int times, int onMs, int offMs);
 void errorSignal(const char *message);
-
 
 // Setup
 void setup()
@@ -115,36 +88,49 @@ void setup()
 }
 
 // Loop
-void loop(){
-  
-  if (recording) {
+void loop()
+{
+  now = millis();
+  if (!recording && now - recordingStop >= 10000)
+  {
+    recording = true;
+    recordingStart = now;
+  }
+
+  if (recording)
+  {
     captureFrame();
 
     // Stop after 10 seconds
-    if (millis() > 10000) {
-        stopRecording();
+    if (now - recordingStart >= 10000)
+    {
+      stopRecording();
+      recordingStop = now;
+      recording = false;
     }
   }
-  now = millis();
 
   if (now - lastSampleTime >= SAMPLE_INTERVAL_MS)
   {
     lastSampleTime = now;
 
-    readSensors();
+    previousAltitude = sensorData.altitude;
+    sensorData = getSensorData();
+    sd_log(sensorData);
 
     switch (state)
     {
 
-    case PRELAUNCH:
-      checkLaunch();
+    case PREDROP:
+      checkRelease();
       break;
 
-    case ASCENT:
-      checkApogee();
-      break;
-
-    case APOGEE:
+    case RELEASED:
+      if (!recording)
+      {
+        recording = true;
+        recordingStart = now;
+      }
       state = DESCENT;
       break;
 
@@ -158,62 +144,18 @@ void loop(){
     }
   }
 }
-
-// Sensor init
-bool initSensors()
+void checkRelease()
 {
-  if (!bmp.begin(0x77))
+  float totalAccel = sqrt(sensorData.accelData.accelX * sensorData.accelData.accelX + sensorData.accelData.accelY * sensorData.accelData.accelY + sensorData.accelData.accelZ * sensorData.accelData.accelZ);
+  float altitudeDrop = previousAltitude - sensorData.altitude;
+
+  if (totalAccel < 3.0 && altitudeDrop > 0.5)
   {
-    Serial.println("BMP280 fail");
-    return false;
-  }
-
-  if (!mpu.begin())
-  {
-    Serial.println("MPU6050 fail");
-    return false;
-  }
-
-  mpu.setAccelerometerRange(MPU6050_RANGE_16_G);
-  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
-  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
-
-  return true;
-}
-
-// Calibrate ground altitude
-void calibrateGroundAltitude()
-{
-  float sum = 0.0f;
-
-  for (int i = 0; i < 20; i++)
-  {
-    float pressure = bmp.readPressure();
-    sum += 44330.0f * (1.0f - pow(pressure / 101325.0f, 0.1903f));
-    delay(50);
-  }
-
-  groundAltitude = sum / 20;
-  altitude = 0.0f;
-  emaReady = true;
-}
-
-// Read sensors
-void readSensors()
-{
-  float pressure = bmp.readPressure();
-  temp = bmp.readTemperature();
-
-  float rawAltitude = 44330.0f * (1.0f - pow(pressure / 101325.0f, 0.1903f)) - groundAltitude;
-
-  if (!emaReady)
-  {
-    altitude = rawAltitude;
-    emaReady = true;
+    dropCounter += 1;
   }
   else
   {
-    altitude = EMA_ALPHA * altitude + (1.0f - EMA_ALPHA) * rawAltitude;
+    dropCounter = 0;
   }
 
   sensors_event_t a, g, t;
@@ -243,46 +185,27 @@ void checkLaunch()
 
   if (totalAccel > LAUNCH_ACCEL_THRESHOLD)
   {
-    accelCount++; // count sustained accel
-  }
-  else
-  {
-    accelCount = 0; // reset
-  }
-
-  if (accelCount > 5 && altitude > LAUNCH_ALT_THRESHOLD)
-  { // sustained accel + altitude
-    state = ASCENT;
-    maxAltitude = altitude;
-    digitalWrite(LED_ONBOARD, LOW); // LED on
-    Serial.println("LAUNCH DETECTED");
-  }
-}
-
-// Detect apogee
-void checkApogee()
-{
-  if (altitude > maxAltitude)
-  {
-    maxAltitude = altitude;
-  }
-
-  if (altitude < (maxAltitude - APOGEE_DROP_THRESHOLD))
-  {
-    state = APOGEE;
-    Serial.println("APOGEE");
+    state = RELEASED;
+    Serial.println("Release detected");
   }
 }
 
 // Detect landing
 void checkLanding()
 {
-  float totalAccel = sqrt(accelX * accelX + accelY * accelY + accelZ * accelZ);
-
-  if (altitude < LANDING_ALT_THRESHOLD && totalAccel < LANDING_ACCEL_MAX)
+  float totalAccel = sqrt(sensorData.accelData.accelX * sensorData.accelData.accelX + sensorData.accelData.accelY * sensorData.accelData.accelY + sensorData.accelData.accelZ * sensorData.accelData.accelZ);
+  float altitudeChange = abs(previousAltitude - sensorData.altitude);
+  if (totalAccel > LANDING_ACCEL_THRESHOLD && sensorData.altitude < LANDING_ALT_THRESHOLD && altitudeChange < LANDING_ALTCHANGE_THRESHOLD)
+  {
+    landedCounter += 1;
+  }
+  else
+  {
+    landedCounter = 0;
+  }
+  if (landedCounter >= 20)
   {
     state = LANDED;
-    Serial.println("LANDED");
   }
 }
 

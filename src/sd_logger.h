@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include "sensors.h"
 
 #define SD_MMC_CMD        47
 #define SD_MMC_CLK        39
@@ -11,7 +12,7 @@
 
 #define LOG_FILENAME "/flight_data.csv"
 
-//functions
+// functions
 bool sd_init();
 
 void sd_log(float temperature, float pressure, float altitude);

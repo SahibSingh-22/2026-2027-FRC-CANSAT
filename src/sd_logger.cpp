@@ -26,11 +26,25 @@ void sd_log(float temperature, float pressure, float altitude) {
     rowCount++;
     logFile.print(rowCount);
     logFile.print(",");
-    logFile.print(temperature, 2);
+    logFile.print(millis(), 2);
     logFile.print(",");
-    logFile.print(pressure, 2);
+    logFile.print(sensorData.temp, 3);
     logFile.print(",");
-    logFile.println(altitude, 2);
+    logFile.print(sensorData.pressure, 3);
+    logFile.print(",");
+    logFile.print(sensorData.altitude, 3);
+    logFile.print(",");
+    logFile.print(sensorData.accelData.accelX, 3);
+    logFile.print(",");
+    logFile.print(sensorData.accelData.accelY, 3);
+    logFile.print(",");
+    logFile.print(sensorData.accelData.accelZ, 3);
+    logFile.print(",");
+    logFile.print(sensorData.gyroData.gyroX, 3);
+    logFile.print(",");
+    logFile.print(sensorData.gyroData.gyroY, 3);
+    logFile.print(",");
+    logFile.println(sensorData.gyroData.gyroZ);
 
     logFile.close();
 
