@@ -23,9 +23,7 @@
 #define HREF_GPIO_NUM     7
 #define PCLK_GPIO_NUM     13
 
-#define SD_MMC_CMD        38
-#define SD_MMC_CLK        39
-#define SD_MMC_D0         40
+
 
 File videoFile;
 bool recording = false;
@@ -68,14 +66,6 @@ void initCamera() {
     Serial.println("Camera initialized.");
 }
 
-void initSD() {
-    SD_MMC.setPins(SD_MMC_CLK, SD_MMC_CMD, SD_MMC_D0);
-    if (!SD_MMC.begin("/sdcard", true)) { // true = 1-bit mode
-        Serial.println("SD card mount failed!");
-        while (true) delay(1000);
-    }
-    Serial.println("SD card initialized.");
-}
 
 void startRecording() {
     // Find a unique filename

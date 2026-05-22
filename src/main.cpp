@@ -3,7 +3,10 @@
 #include <Wire.h>
 #include "camera.h"
 #include "sd_logger.h"
-#include "constants.h"
+
+#define I2C_SDA 1    // I2C data
+#define I2C_SCL 2     // I2C clock
+#define LED_ONBOARD 33 // LED active LOW
 
 // Flight states
 enum FlightState
@@ -73,9 +76,10 @@ void setup()
   calibrateGroundAltitude();
 
   ledBlink(3, 150, 150);
-
+  
+  sd_init();
   initCamera();
-  initSD();
+  
 
   sensorData = getSensorData();
 
@@ -154,7 +158,32 @@ void checkRelease()
     dropCounter = 0;
   }
 
-  if (dropCounter >= 3)
+  sensors_event_t a, g, t;
+  mpu.getEvent(&a, &g, &t);
+
+  accelX = a.acceleration.x;
+  accelY = a.acceleration.y;
+  accelZ = a.acceleration.z;
+
+  gyroX = g.gyro.x;
+  gyroY = g.gyro.y;
+  gyroZ = g.gyro.z;
+
+  Serial.println("Temperature: ");
+  Serial.println(temp);
+  Serial.println("Pressure: ");
+  Serial.println(pressure);
+  Serial.println("Altitude: ");
+  Serial.println(altitude);
+
+}
+
+// Detect launch (tuned)
+void checkLaunch()
+{
+  float totalAccel = sqrt(accelX * accelX + accelY * accelY + accelZ * accelZ);
+
+  if (totalAccel > LAUNCH_ACCEL_THRESHOLD)
   {
     state = RELEASED;
     Serial.println("Release detected");
