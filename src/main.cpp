@@ -34,20 +34,17 @@ const char *stateToString(FlightState s)
 // State variables
 FlightState state = PREDROP;
 
-float previousAltitude = 0.0f;
-float groundAltitude = 0.0f;
 telemetryData sensorData;
 
 int landedCounter = 0;
 int dropCounter = 0;
 
+float previousAltitude = 0.0f;
+
 unsigned long now = 0;
 unsigned long recordingStart = 0;
 unsigned long recordingStop = 0;
 unsigned long lastSampleTime = 0;
-
-// EMA filter
-bool emaReady = false;
 
 // Function declarations
 void checkRelease();
@@ -80,6 +77,8 @@ void setup()
   initCamera();
   initSD();
 
+  sensorData = getSensorData();
+
   startRecording();
 }
 
@@ -111,6 +110,7 @@ void loop()
     lastSampleTime = now;
 
     previousAltitude = sensorData.altitude;
+
     sensorData = getSensorData();
     sd_log(sensorData);
 

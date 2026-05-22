@@ -1,6 +1,10 @@
 #include "sensors.h"
 #include <Arduino.h>
 
+float previousFilteredAltitude = 0.0f;
+float groundAltitude = 0.0f;
+bool emaReady = false;
+
 bool initSensors()
 {
     if (!initBMP())
@@ -23,7 +27,8 @@ telemetryData getSensorData()
 
     data.accelData = getAccel();
     data.gyroData = getGyro();
-    data.altitude = getAltitude(previousAltitude, groundAltitude, emaReady);
+    data.altitude = getAltitude(previousFilteredAltitude, groundAltitude, emaReady);
+    previousFilteredAltitude = data.altitude;
     data.temp = getTemp();
     data.pressure = getPressure();
 
