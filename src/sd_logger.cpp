@@ -49,7 +49,7 @@ void sd_log(telemetryData sensorData)
     rowCount++;
     logFile.print(rowCount);
     logFile.print(",");
-    logFile.print(millis(), 2);
+    logFile.print(millis());
     logFile.print(",");
     logFile.print(sensorData.temp, 3);
     logFile.print(",");
