@@ -2,28 +2,38 @@
 #include <FS.h>
 #include <SD_MMC.h>
 
+#define SD_MMC_CMD 38
+#define SD_MMC_CLK 39
+#define SD_MMC_D0 40
+
+#define LOG_FILENAME "/flight_data.csv"
+
 static uint32_t rowCount = 0;
-bool sd_init()
+void sd_init()
 {
-    SD_MMC.setPins(SD_MMC_CLK, SD_MMC_CMD, SD_MMC_D0, SD_MMC_D1, SD_MMC_D2, SD_MMC_D3);
-    if (!SD_MMC.begin("/sdcard", false))
+    SD_MMC.setPins(SD_MMC_CLK, SD_MMC_CMD, SD_MMC_D0);
+    if (!SD_MMC.begin("/sdcard", true))
     {
         if (xSemaphoreTake(serialMonitorMutex, portMAX_DELAY) == pdTRUE)
         {
             Serial.println("SD Card Mount Failed");
             xSemaphoreGive(serialMonitorMutex);
         }
-        return false;
+        return;
     }
     else
     {
-        return true;
+        if (xSemaphoreTake(serialMonitorMutex, portMAX_DELAY) == pdTRUE)
+        {
+            Serial.println("SD Card Mount Success");
+            xSemaphoreGive(serialMonitorMutex);
+        }
+        return;
     }
 }
 
 void sd_log(telemetryData sensorData)
 {
-    // idk the what exactly we are measuring so i put random ones down feel free to change them
     File logFile = SD_MMC.open(LOG_FILENAME, FILE_APPEND);
 
     if (!logFile)

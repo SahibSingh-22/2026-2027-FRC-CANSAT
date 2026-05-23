@@ -1,6 +1,12 @@
 #include <Arduino.h>
-#include "sensors.h"
 #include <Wire.h>
+
+#include "constants.h"
+
+#include "sensors.h"
+#include "bmp280.h"
+#include "mpu6050.h"
+
 #include "camera.h"
 #include "sd_logger.h"
 #include "constants.h"
@@ -79,11 +85,14 @@ void setup()
 
   Wire.begin(I2C_SDA, I2C_SCL);
 
+  sd_init();
+  initCamera();
+  
   if (!initSensors())
   {
-    errorSignal("Sensor init failed!");
+    // errorSignal("Sensor init failed!");
+    Serial.println("Sensor init failed!");
   }
-
   calibrateGroundAltitude();
 
   telemetryQueue = xQueueCreate(20, sizeof(telemetryData));                                      // give number of items that will get stored in queue and size of the type
@@ -98,6 +107,9 @@ void loop()
 
   now = millis();
 
+  
+  
+  // Sample sensors every 100ms
   if (now - lastSampleTime >= SAMPLE_INTERVAL_MS)
   {
     lastSampleTime = now;
@@ -123,7 +135,18 @@ void loop()
       break;
     }
   }
+  Serial.print("Temperature: ");
+  Serial.print(sensorData.temp);
+  Serial.print("Pressure: ");
+  Serial.print(sensorData.pressure);
+  Serial.print("Altitude: ");
+  Serial.println(sensorData.altitude);
 }
+
+
+
+
+
 void checkRelease()
 {
   float totalAccel = sqrt(sensorData.accelData.accelX * sensorData.accelData.accelX + sensorData.accelData.accelY * sensorData.accelData.accelY + sensorData.accelData.accelZ * sensorData.accelData.accelZ);

@@ -4,24 +4,8 @@
 #include "SD_MMC.h"
 #include "camera.h"
 
-// Freenove ESP32-S3 WROOM camera pin definitions
-#define PWDN_GPIO_NUM -1
-#define RESET_GPIO_NUM -1
-#define XCLK_GPIO_NUM 15
-#define SIOD_GPIO_NUM 4
-#define SIOC_GPIO_NUM 5
-
-#define Y9_GPIO_NUM 16
-#define Y8_GPIO_NUM 17
-#define Y7_GPIO_NUM 18
-#define Y6_GPIO_NUM 12
-#define Y5_GPIO_NUM 10
-#define Y4_GPIO_NUM 8
-#define Y3_GPIO_NUM 9
-#define Y2_GPIO_NUM 11
-#define VSYNC_GPIO_NUM 6
-#define HREF_GPIO_NUM 7
-#define PCLK_GPIO_NUM 13
+#define CAMERA_MODEL_ESP32S3_EYE
+#include "camera_pins.h"
 
 File videoFile;
 bool recording = false;
@@ -65,6 +49,7 @@ void initCamera()
             Serial.printf("Camera init failed: 0x%x\n", err);
             xSemaphoreGive(serialMonitorMutex);
         }
+        return;
         while (true)
             delay(1000);
     }
@@ -73,6 +58,11 @@ void initCamera()
         Serial.println("Camera initialized.");
         xSemaphoreGive(serialMonitorMutex);
     }
+    config.frame_size = FRAMESIZE_VGA;
+    config.jpeg_quality = 12;
+    config.fb_count = 2;
+    config.fb_location = CAMERA_FB_IN_PSRAM;
+    config.grab_mode = CAMERA_GRAB_LATEST;
 }
 
 void startRecording()

@@ -6,7 +6,6 @@
 extern SemaphoreHandle_t serialMonitorMutex;
 
 void initCamera();
-void initSD();
 void startRecording();
 void stopRecording();
 void captureFrame();

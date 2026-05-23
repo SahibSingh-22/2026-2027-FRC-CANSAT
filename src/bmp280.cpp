@@ -43,5 +43,6 @@ bool initBMP()
     {
         return false;
     }
+    Serial.println("BMP280 init success!");
     return true;
 }
