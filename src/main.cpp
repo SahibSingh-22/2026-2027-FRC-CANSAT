@@ -5,15 +5,10 @@
 #include "sd_logger.h"
 #include "constants.h"
 
-#define I2C_SDA 1      // I2C data
-#define I2C_SCL 2      // I2C clock
-#define LED_ONBOARD 33 // LED active LOW
-
 // Flight states
 enum FlightState
 {
   PREDROP,
-  RELEASED,
   DESCENT,
   LANDED
 };
@@ -24,8 +19,6 @@ const char *stateToString(FlightState s)
   {
   case PREDROP:
     return "PREDROP";
-  case RELEASED:
-    return "RELEASED";
   case DESCENT:
     return "DESCENT";
   case LANDED:
@@ -39,6 +32,7 @@ const char *stateToString(FlightState s)
 FlightState state = PREDROP;
 
 telemetryData sensorData;
+QueueHandle_t telemetryQueue; // create the queue
 
 int landedCounter = 0;
 int dropCounter = 0;
@@ -46,15 +40,30 @@ int dropCounter = 0;
 float previousAltitude = 0.0f;
 
 unsigned long now = 0;
-unsigned long recordingStart = 0;
-unsigned long recordingStop = 0;
 unsigned long lastSampleTime = 0;
 
 // Function declarations
 void checkRelease();
 void checkLanding();
-void ledBlink(int times, int onMs, int offMs);
 void errorSignal(const char *message);
+
+// function task which will be run on core 0
+void storageAndCameraTask(void *parameter)
+{                   // this parameter won't be used in our code but it is important for tasks but it can be used to pass in and make multiple tasks from the same function
+  startRecording(); // things to do before we go into loop for core 0
+  initCamera();
+  sd_init();
+  telemetryData receivedData; // data which is getting received from the queue
+  while (true)
+  {
+    captureFrame();
+    while (xQueueReceive(telemetryQueue, &receivedData, 0) == pdPASS)
+    { // keep pulling data from queue until there is none left before going to captureFram() this is due to captureFrame() taking longer than other tasks so there will be a few items in queue by the time it comes back around
+      sd_log(receivedData);
+    }
+    vTaskDelay(pdMS_TO_TICKS(5)); // IMPORTANT we need to give the core a break to do background tasks, this is baked into loop() but not into FreeRTOS tasks
+  }
+}
 
 // Setup
 void setup()
@@ -76,38 +85,17 @@ void setup()
 
   calibrateGroundAltitude();
 
-  ledBlink(3, 150, 150);
-
-  sd_init();
-  initCamera();
+  telemetryQueue = xQueueCreate(20, sizeof(telemetryData));                                      // give number of items that will get stored in queue and size of the type
+  xTaskCreatePinnedToCore(storageAndCameraTask, "storageAndCameraTask", 8192, NULL, 1, NULL, 0); // create task, pass in function, label, memory allocated for this task, priorty and the core number which will run task
 
   sensorData = getSensorData();
-
-  startRecording();
 }
 
 // Loop
 void loop()
 {
+
   now = millis();
-  if (!recording && now - recordingStop >= 10000)
-  {
-    recording = true;
-    recordingStart = now;
-  }
-
-  if (recording)
-  {
-    captureFrame();
-
-    // Stop after 10 seconds
-    if (now - recordingStart >= 10000)
-    {
-      stopRecording();
-      recordingStop = now;
-      recording = false;
-    }
-  }
 
   if (now - lastSampleTime >= SAMPLE_INTERVAL_MS)
   {
@@ -116,7 +104,7 @@ void loop()
     previousAltitude = sensorData.altitude;
 
     sensorData = getSensorData();
-    sd_log(sensorData);
+    xQueueSend(telemetryQueue, &sensorData, 0); // Send sensorData to TelemetryQueue
 
     switch (state)
     {
@@ -125,21 +113,12 @@ void loop()
       checkRelease();
       break;
 
-    case RELEASED:
-      if (!recording)
-      {
-        recording = true;
-        recordingStart = now;
-      }
-      state = DESCENT;
-      break;
-
     case DESCENT:
       checkLanding();
       break;
 
     case LANDED:
-      digitalWrite(LED_ONBOARD, (now / 500) % 2 == 0 ? LOW : HIGH); // blink
+      digitalWrite(LED_ONBOARD, (now / 500) % 2 == 0 ? LOW : HIGH);
       break;
     }
   }
@@ -156,6 +135,11 @@ void checkRelease()
   else
   {
     dropCounter = 0;
+  }
+
+  if (dropCounter > 5)
+  {
+    state = DESCENT;
   }
 }
 
@@ -175,21 +159,9 @@ void checkLanding()
   if (landedCounter >= 20)
   {
     state = LANDED;
+    SAMPLE_INTERVAL_MS = 300; // slow down data recording after landing
   }
 }
-
-// LED blink helper
-void ledBlink(int times, int onMs, int offMs)
-{
-  for (int i = 0; i < times; i++)
-  {
-    digitalWrite(LED_ONBOARD, LOW);
-    delay(onMs);
-    digitalWrite(LED_ONBOARD, HIGH);
-    delay(offMs);
-  }
-}
-
 // Error loop
 void errorSignal(const char *message)
 {
