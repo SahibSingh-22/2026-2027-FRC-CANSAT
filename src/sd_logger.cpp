@@ -26,7 +26,8 @@ void sd_log(telemetryData sensorData) {
     //idk the what exactly we are measuring so i put random ones down feel free to change them
     File logFile = SD_MMC.open(LOG_FILENAME, FILE_APPEND);
 
-    if (!logFile) {
+    if (!logFile)
+    {
         Serial.println("Could not open file to write row.");
         return;
     }

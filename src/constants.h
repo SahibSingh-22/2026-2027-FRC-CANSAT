@@ -11,7 +11,7 @@ constexpr int LED_ONBOARD = 33;
 // ==========================================
 // TIMING & SAMPLING
 // ==========================================
-constexpr unsigned long SAMPLE_INTERVAL_MS = 100;
+int unsigned long SAMPLE_INTERVAL_MS = 100;
 
 // ==========================================
 // FLIGHT THRESHOLDS

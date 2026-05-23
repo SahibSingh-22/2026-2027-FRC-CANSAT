@@ -3,10 +3,6 @@
 #include "mpu6050.h"
 #include "bmp280.h"
 
-extern float previousAltitude;
-extern float groundAltitude;
-extern bool emaReady;
-
 struct telemetryData
 {
     sensorAccel accelData;
