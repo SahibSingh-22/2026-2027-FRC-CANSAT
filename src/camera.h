@@ -2,6 +2,9 @@
 #include "FS.h"
 
 // Function declarations
+
+extern SemaphoreHandle_t serialMonitorMutex;
+
 void initCamera();
 void initSD();
 void startRecording();

@@ -33,6 +33,7 @@ FlightState state = PREDROP;
 
 telemetryData sensorData;
 QueueHandle_t telemetryQueue; // create the queue
+SemaphoreHandle_t serialMonitorMutex;
 
 int landedCounter = 0;
 int dropCounter = 0;
@@ -71,10 +72,10 @@ void setup()
   Serial.begin(115200);
   delay(1000);
 
+  serialMonitorMutex = xSemaphoreCreateMutex();
+
   pinMode(LED_ONBOARD, OUTPUT);
   digitalWrite(LED_ONBOARD, HIGH); // LED off
-
-  Serial.println("Flight Computer Ready");
 
   Wire.begin(I2C_SDA, I2C_SCL);
 
@@ -165,7 +166,11 @@ void checkLanding()
 // Error loop
 void errorSignal(const char *message)
 {
-  Serial.println(message);
+  if (xSemaphoreTake(serialMonitorMutex, portMAX_DELAY) == pdTRUE)
+  {
+    Serial.println(message);
+    xSemaphoreGive(serialMonitorMutex);
+  }
 
   while (true)
   {

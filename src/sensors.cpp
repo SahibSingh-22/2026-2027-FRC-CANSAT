@@ -9,15 +9,27 @@ bool initSensors()
 {
     if (!initBMP())
     {
-        Serial.println("BMP init fail!");
+        if (xSemaphoreTake(serialMonitorMutex, portMAX_DELAY) == pdTRUE)
+        {
+            Serial.println("BMP init fail!");
+            xSemaphoreGive(serialMonitorMutex);
+        }
         return false;
     }
     if (!initMPU())
     {
-        Serial.println("MPU init fail!");
+        if (xSemaphoreTake(serialMonitorMutex, portMAX_DELAY) == pdTRUE)
+        {
+            Serial.println("MPU init fail!");
+            xSemaphoreGive(serialMonitorMutex);
+        }
         return false;
     }
-    Serial.println("Sensors init success!");
+    if (xSemaphoreTake(serialMonitorMutex, portMAX_DELAY) == pdTRUE)
+    {
+        Serial.println("Sensors init success!");
+        xSemaphoreGive(serialMonitorMutex);
+    }
     return true;
 }
 

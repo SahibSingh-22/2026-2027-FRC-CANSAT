@@ -3,6 +3,8 @@
 #include <Arduino.h>
 #include "sensors.h"
 
+extern SemaphoreHandle_t serialMonitorMutex;
+
 #define SD_MMC_CMD 47
 #define SD_MMC_CLK 39
 #define SD_MMC_D0 40

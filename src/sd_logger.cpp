@@ -8,7 +8,11 @@ bool sd_init()
     SD_MMC.setPins(SD_MMC_CLK, SD_MMC_CMD, SD_MMC_D0, SD_MMC_D1, SD_MMC_D2, SD_MMC_D3);
     if (!SD_MMC.begin("/sdcard", false))
     {
-        Serial.println("SD Card Mount Failed");
+        if (xSemaphoreTake(serialMonitorMutex, portMAX_DELAY) == pdTRUE)
+        {
+            Serial.println("SD Card Mount Failed");
+            xSemaphoreGive(serialMonitorMutex);
+        }
         return false;
     }
     else
@@ -24,7 +28,11 @@ void sd_log(telemetryData sensorData)
 
     if (!logFile)
     {
-        Serial.println("Could not open file to write row.");
+        if (xSemaphoreTake(serialMonitorMutex, portMAX_DELAY) == pdTRUE)
+        {
+            Serial.println("Could not open file to write row.");
+            xSemaphoreGive(serialMonitorMutex);
+        }
         return;
     }
 
@@ -52,7 +60,10 @@ void sd_log(telemetryData sensorData)
     logFile.println(sensorData.gyroData.gyroZ);
 
     logFile.close();
-
-    Serial.print("[SD] Row written: ");
-    Serial.println(rowCount);
+    if (xSemaphoreTake(serialMonitorMutex, portMAX_DELAY) == pdTRUE)
+    {
+        Serial.print("[SD] Row written: ");
+        Serial.println(rowCount);
+        xSemaphoreGive(serialMonitorMutex);
+    }
 }
