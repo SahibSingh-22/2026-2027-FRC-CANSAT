@@ -3,7 +3,6 @@
 
 // Function declarations
 void initCamera();
-void initSD();
 void startRecording();
 void stopRecording();
 void captureFrame();

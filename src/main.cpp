@@ -1,11 +1,19 @@
 #include <Arduino.h>
-#include "sensors.h"
 #include <Wire.h>
+
+#include "constants.h"
+
+#include "sensors.h"
+#include "bmp280.h"
+#include "mpu6050.h"
+
 #include "camera.h"
 #include "sd_logger.h"
 
-#define I2C_SDA 1    // I2C data
-#define I2C_SCL 2     // I2C clock
+
+
+#define I2C_SDA 1  // I2C data
+#define I2C_SCL 2    // I2C clock
 #define LED_ONBOARD 33 // LED active LOW
 
 // Flight states
@@ -45,8 +53,7 @@ int landedCounter = 0;
 int dropCounter = 0;
 
 unsigned long now = 0;
-unsigned long recordingStart = 0;
-unsigned long recordingStop = 0;
+
 unsigned long lastSampleTime = 0;
 
 // EMA filter
@@ -71,17 +78,19 @@ void setup()
 
   Wire.begin(I2C_SDA, I2C_SCL);
 
+  sd_init();
+  initCamera();
+  
   if (!initSensors())
   {
-    errorSignal("Sensor init failed!");
+    // errorSignal("Sensor init failed!");
+    Serial.println("Sensor init failed!");
   }
-
   calibrateGroundAltitude();
 
   ledBlink(3, 150, 150);
   
-  sd_init();
-  initCamera();
+
   
 
   startRecording();
@@ -91,25 +100,23 @@ void setup()
 void loop()
 {
   now = millis();
-  if (!recording && now - recordingStop >= 10000)
-  {
-    recording = true;
-    recordingStart = now;
-  }
 
   if (recording)
   {
     captureFrame();
 
     // Stop after 10 seconds
-    if (now - recordingStart >= 10000)
+    if (now >= 10000)
     {
       stopRecording();
-      recordingStop = now;
       recording = false;
     }
   }
+  
 
+  
+  
+  // Sample sensors every 100ms
   if (now - lastSampleTime >= SAMPLE_INTERVAL_MS)
   {
     lastSampleTime = now;
@@ -129,7 +136,7 @@ void loop()
       if (!recording)
       {
         recording = true;
-        recordingStart = now;
+
       }
       state = DESCENT;
       break;
@@ -143,7 +150,18 @@ void loop()
       break;
     }
   }
+  Serial.print("Temperature: ");
+  Serial.print(sensorData.temp);
+  Serial.print("Pressure: ");
+  Serial.print(sensorData.pressure);
+  Serial.print("Altitude: ");
+  Serial.println(sensorData.altitude);
 }
+
+
+
+
+
 void checkRelease()
 {
   float totalAccel = sqrt(sensorData.accelData.accelX * sensorData.accelData.accelX + sensorData.accelData.accelY * sensorData.accelData.accelY + sensorData.accelData.accelZ * sensorData.accelData.accelZ);
@@ -158,36 +176,8 @@ void checkRelease()
     dropCounter = 0;
   }
 
-  sensors_event_t a, g, t;
-  mpu.getEvent(&a, &g, &t);
 
-  accelX = a.acceleration.x;
-  accelY = a.acceleration.y;
-  accelZ = a.acceleration.z;
 
-  gyroX = g.gyro.x;
-  gyroY = g.gyro.y;
-  gyroZ = g.gyro.z;
-
-  Serial.println("Temperature: ");
-  Serial.println(temp);
-  Serial.println("Pressure: ");
-  Serial.println(pressure);
-  Serial.println("Altitude: ");
-  Serial.println(altitude);
-
-}
-
-// Detect launch (tuned)
-void checkLaunch()
-{
-  float totalAccel = sqrt(accelX * accelX + accelY * accelY + accelZ * accelZ);
-
-  if (totalAccel > LAUNCH_ACCEL_THRESHOLD)
-  {
-    state = RELEASED;
-    Serial.println("Release detected");
-  }
 }
 
 // Detect landing
