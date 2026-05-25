@@ -50,8 +50,6 @@ void initCamera()
             xSemaphoreGive(serialMonitorMutex);
         }
         return;
-        while (true)
-            delay(1000);
     }
     if (xSemaphoreTake(serialMonitorMutex, portMAX_DELAY) == pdTRUE)
     {

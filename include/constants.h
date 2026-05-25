@@ -1,6 +1,10 @@
 // config.h
 #pragma once
 
+
+extern SemaphoreHandle_t serialMonitorMutex;
+extern SemaphoreHandle_t sdMutex;
+
 // ==========================================
 // PIN DEFINITIONS
 // ==========================================

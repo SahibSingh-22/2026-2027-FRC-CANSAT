@@ -40,6 +40,7 @@ FlightState state = PREDROP;
 telemetryData sensorData;
 QueueHandle_t telemetryQueue; // create the queue
 SemaphoreHandle_t serialMonitorMutex;
+SemaphoreHandle_t sdMutex;
 
 int landedCounter = 0;
 int dropCounter = 0;
@@ -57,9 +58,11 @@ void errorSignal(const char *message);
 // function task which will be run on core 0
 void storageAndCameraTask(void *parameter)
 {                   // this parameter won't be used in our code but it is important for tasks but it can be used to pass in and make multiple tasks from the same function
-  startRecording(); // things to do before we go into loop for core 0
-  initCamera();
+  // things to do before we go into loop for core 0
   sd_init();
+  initCamera();
+  startRecording(); 
+
   telemetryData receivedData; // data which is getting received from the queue
   while (true)
   {
@@ -79,14 +82,12 @@ void setup()
   delay(1000);
 
   serialMonitorMutex = xSemaphoreCreateMutex();
+  sdMutex = xSemaphoreCreateMutex();
 
   pinMode(LED_ONBOARD, OUTPUT);
   digitalWrite(LED_ONBOARD, HIGH); // LED off
 
   Wire.begin(I2C_SDA, I2C_SCL);
-
-  sd_init();
-  initCamera();
   
   if (!initSensors())
   {
@@ -96,7 +97,7 @@ void setup()
   calibrateGroundAltitude();
 
   telemetryQueue = xQueueCreate(20, sizeof(telemetryData));                                      // give number of items that will get stored in queue and size of the type
-  xTaskCreatePinnedToCore(storageAndCameraTask, "storageAndCameraTask", 8192, NULL, 1, NULL, 0); // create task, pass in function, label, memory allocated for this task, priorty and the core number which will run task
+  xTaskCreatePinnedToCore(storageAndCameraTask, "storageAndCameraTask", 16384, NULL, 1, NULL, 0); // create task, pass in function, label, memory allocated for this task, priorty and the core number which will run task
 
   sensorData = getSensorData();
 }
